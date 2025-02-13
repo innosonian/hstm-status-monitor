@@ -9,19 +9,15 @@
 <body>
   <header>
     <h1>Status Page</h1>
-    <p>Last Updated: Dec 24, 2024</p>
+    <p>Last Updated: <span id="last-updated">Loading...</span></p>
   </header>
   
   <div class="content">
     <!-- Service History Section -->
     <div class="section">
       <h2>Service History</h2>
-      <ul>
-        <li>Dec 24, 2024: ⚠️ Some issues detected</li>
-        <li>Dec 23, 2024: ✅ All services operational</li>
-        <li>Dec 22, 2024: ❌ Outage in Lightsail</li>
-        <li>Dec 21, 2024: ✅ All services operational</li>
-        <li>Dec 20, 2024: ⚠️ Degradation in Lambda</li>
+      <ul id="service-history">
+        <li>Loading...</li>
       </ul>
     </div>
 
@@ -36,17 +32,8 @@
             <th>Last Update Time</th>
           </tr>
         </thead>
-        <tbody>
-          <tr onclick="showEventDetails('event1')">
-            <td>Increased Latency</td>
-            <td>Dec 24, 2024, 12:00 UTC</td>
-            <td>Dec 24, 2024, 12:20 UTC</td>
-          </tr>
-          <tr onclick="showEventDetails('event2')">
-            <td>Service Outage</td>
-            <td>Dec 24, 2024, 13:00 UTC</td>
-            <td>Dec 24, 2024, 14:00 UTC</td>
-          </tr>
+        <tbody id="event-list">
+          <tr><td colspan="3">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -54,69 +41,194 @@
     <!-- Event Details -->
     <div id="event-details" class="section hidden">
       <h2>Event Details</h2>
-      <p><strong>Status:</strong> <span id="event-status" class="resolved">Resolved</span></p>
-      <p><strong>Event Name:</strong> <span id="event-name">Service Outage</span></p>
-      <p><strong>Start Time:</strong> <span id="event-start">Dec 24, 2024, 13:00 UTC</span></p>
-      <p><strong>Last Update Time:</strong> <span id="event-last-update">Dec 24, 2024, 14:00 UTC</span></p>
-      <p><strong>Service:</strong> <span id="event-service">S3 Storage</span></p>
+      <p><strong>Status:</strong> <span id="event-status">Loading...</span></p>
+      <p><strong>Event Name:</strong> <span id="event-name">Loading...</span></p>
+      <p><strong>Start Time:</strong> <span id="event-start">Loading...</span></p>
+      <p><strong>Last Update Time:</strong> <span id="event-last-update">Loading...</span></p>
+      <p><strong>Service:</strong> <span id="event-service">Loading...</span></p>
       <h3>Description</h3>
-      <div class="timeline">
+      <div class="timeline" id="event-description">
         <div class="timeline-item">
-          <p><strong>13:00 UTC:</strong> Service outage detected.</p>
-        </div>
-        <div class="timeline-item">
-          <p><strong>13:30 UTC:</strong> Engineers identified the root cause.</p>
-        </div>
-        <div class="timeline-item">
-          <p><strong>14:00 UTC:</strong> Service restored.</p>
+          <p>Loading...</p>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    function showEventDetails(eventId) {
-      const detailsSection = document.getElementById("event-details");
-      detailsSection.classList.remove("hidden");
+    // GraphQL API Endpoint
+    const GRAPHQL_URL = "https://curious-moccasin-87.hasura.app/v1/graphql";
 
-      if (eventId === "event1") {
-        document.getElementById("event-status").textContent = "Resolved";
-        document.getElementById("event-status").className = "resolved";
-        document.getElementById("event-name").textContent = "Increased Latency";
-        document.getElementById("event-start").textContent = "Dec 24, 2024, 12:00 UTC";
-        document.getElementById("event-last-update").textContent = "Dec 24, 2024, 12:20 UTC";
-        document.getElementById("event-service").textContent = "Lightsail";
-        document.querySelector(".timeline").innerHTML = `
-          <div class="timeline-item">
-            <p><strong>12:00 UTC:</strong> High latency detected.</p>
-          </div>
-          <div class="timeline-item">
-            <p><strong>12:10 UTC:</strong> Engineers are investigating.</p>
-          </div>
-          <div class="timeline-item">
-            <p><strong>12:20 UTC:</strong> Latency issue resolved.</p>
-          </div>
+    function getOneMonthAgoFormatted() {
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const day = oneMonthAgo.getDate().toString().padStart(2, '0');
+    const month = (oneMonthAgo.getMonth() + 1).toString().padStart(2, '0');
+    const year = oneMonthAgo.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  // Fetch Service History (1개월 전 데이터부터 조회하며, status에 "✅" 또는 "⚠️"가 포함된 항목은 제외)
+  async function fetchServiceHistory() {
+    const fromDateFormatted = getOneMonthAgoFormatted();
+
+    const response = await fetch(GRAPHQL_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: `
+          query GetHistoryList($from_date: string!) {
+            history(
+              where: { 
+                date: { _gt: $from_date },
+              }
+            ) {
+              _id
+              date
+              status
+            }
+          }
+        `,
+        variables: {
+          from_date: fromDateFormatted
+        }
+      }),
+    });
+
+    const result = await response.json();
+    console.log("History", result);
+    
+    const serviceHistoryElement = document.getElementById("service-history");
+    const filteredHistory = result.data.history.filter(item => {
+      return !item.status.includes("✅") && !item.status.includes("⚠️");
+    });
+    
+    serviceHistoryElement.innerHTML = "";
+    if (filteredHistory.length > 0) {
+      filteredHistory.forEach(item => {
+        const listItem = document.createElement("li");
+        listItem.textContent = `${item.date}: ${item.status}`;
+        serviceHistoryElement.appendChild(listItem);
+      });
+    } else {
+      serviceHistoryElement.innerHTML = "<li>There has been no service downtime in the past 30 days.</li>";
+    }
+  }
+
+    // Fetch Event List
+    async function fetchEventList() {
+      const response = await fetch(GRAPHQL_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `
+            query GetEvent {
+              event {
+                name
+                _id
+                lastUpdateTime
+                service
+                startTime
+                resolved
+              }
+            }
+          `,
+        }),
+      });
+      const result = await response.json();
+      const eventListElement = document.getElementById("event-list");
+      eventListElement.innerHTML = "";
+      result.data.event.forEach((event) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${event.name}</td>
+          <td>${event.startTime}</td>
+          <td>${event.lastUpdateTime}</td>
         `;
-      } else if (eventId === "event2") {
-        document.getElementById("event-status").textContent = "Resolved";
-        document.getElementById("event-status").className = "resolved";
-        document.getElementById("event-name").textContent = "Service Outage";
-        document.getElementById("event-start").textContent = "Dec 24, 2024, 13:00 UTC";
-        document.getElementById("event-last-update").textContent = "Dec 24, 2024, 14:00 UTC";
-        document.getElementById("event-service").textContent = "S3 Storage";
-        document.querySelector(".timeline").innerHTML = `
-          <div class="timeline-item">
-            <p><strong>13:00 UTC:</strong> Service outage detected.</p>
-          </div>
-          <div class="timeline-item">
-            <p><strong>13:30 UTC:</strong> Engineers identified the root cause.</p>
-          </div>
-          <div class="timeline-item">
-            <p><strong>14:00 UTC:</strong> Service restored.</p>
-          </div>
-        `;
+        // Add event listener to fetch details on click
+        row.addEventListener("click", () => fetchEventDetails(event._id));
+        eventListElement.appendChild(row);
+      });
+    }
+
+    // Fetch Event Details
+    // Fetch Event Details
+    async function fetchEventDetails(eventId) {
+      const response = await fetch(GRAPHQL_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `
+            query GetEventDetail($id: string) {
+              event_detail(where: { _id: { _eq: $id } }) {
+                _id
+                name
+                startTime
+                lastUpdateTime
+              }
+            }
+          `,
+          variables: {
+            id: eventId,
+          },
+        }),
+      }); 
+
+      const result = await response.json(); 
+
+      if (response.ok && !result.errors) {
+        const eventData = result.data.event_detail[0]; // Assuming one matching record  
+
+        // Update event details section
+        const eventDetailsSection = document.getElementById("event-details");
+        document.getElementById("event-status").textContent = eventData.resolved
+          ? "Resolved"
+          : "Unresolved";
+        document.getElementById("event-name").textContent = eventData.name;
+        document.getElementById("event-start").textContent = eventData.startTime;
+        document.getElementById("event-last-update").textContent =
+          eventData.lastUpdateTime;
+          document.getElementById("event-service").textContent = eventData.service || "N/A";
+
+          const timelineElement = document.getElementById("event-description");
+          timelineElement.innerHTML = "";
+          if (eventData.description) {
+            eventData.description.forEach((desc) => {
+              const timelineItem = document.createElement("div");
+              timelineItem.className = "timeline-item";
+              timelineItem.innerHTML = `<p><strong>${desc.time}:</strong> ${desc.detail}</p>`;
+              timelineElement.appendChild(timelineItem);
+            });
+          } else {
+            const emptyMessage = document.createElement("div");
+            emptyMessage.className = "timeline-item";
+            emptyMessage.innerHTML = `<p>N/A</p>`;
+            timelineElement.appendChild(emptyMessage);
+          }
+
+        // Show event details section
+        eventDetailsSection.classList.remove("hidden");
+      } else {
+        console.error("GraphQL Error:", result.errors || response.statusText);
       }
     }
+
+
+    // Initialize Page
+    async function initializePage() {
+      const lastUpdatedElement = document.getElementById("last-updated");
+      lastUpdatedElement.textContent = new Date().toLocaleString();
+      await Promise.all([fetchServiceHistory(), fetchEventList()]);
+    }
+
+    // On page load
+    document.addEventListener("DOMContentLoaded", initializePage);
   </script>
 </body>
 </html>
