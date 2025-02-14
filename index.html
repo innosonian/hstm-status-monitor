@@ -13,29 +13,60 @@
   </header>
   
   <div class="content">
-    <!-- Service History Section -->
-    <div class="section">
-      <h2>Service History</h2>
-      <ul id="service-history">
-        <li>Loading...</li>
-      </ul>
+    <!-- Common Filters -->
+    <div class="filters-section">
+      <div class="filters-container">
+        <div class="filters-left">
+          <span>Year</span>
+          <select id="year-filter"></select>
+          <span>Month</span>
+          <select id="month-filter"></select>
+        </div>
+        <div class="download-container">
+          <button id="download-report" class="download-btn">Download Report</button>
+          <div id="loading-spinner" class="spinner hidden"></div>
+        </div>
+      </div>
     </div>
 
+    <!-- Service History Section -->
+    <div class="section loading-container">
+      <div class="section-loader hidden">
+        <div class="section-spinner"></div>
+      </div>
+      <div class="section-content">
+        <div class="section-header">
+          <h2>Service History</h2>
+        </div>
+        <ul id="service-history">
+          <li>Loading...</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 차트를 그리기 위한 숨겨진 캔버스 -->
+    <canvas id="reportChart" style="display: none;"></canvas>
+
     <!-- List of Events -->
-    <div class="section">
-      <h2>List of Events</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Event</th>
-            <th>Start Time</th>
-            <th>Last Update Time</th>
-          </tr>
-        </thead>
-        <tbody id="event-list">
-          <tr><td colspan="3">Loading...</td></tr>
-        </tbody>
-      </table>
+    <div class="section loading-container">
+      <div class="section-loader hidden">
+        <div class="section-spinner"></div>
+      </div>
+      <div class="section-content">
+        <h2>List of Events</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>Start Time</th>
+              <th>Last Update Time</th>
+            </tr>
+          </thead>
+          <tbody id="event-list">
+            <tr><td colspan="3">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Event Details -->
@@ -55,70 +86,75 @@
     </div>
   </div>
 
+  <!-- 외부 라이브러리 추가 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <script>
-    // GraphQL API Endpoint
     const GRAPHQL_URL = "https://curious-moccasin-87.hasura.app/v1/graphql";
 
-    function getOneMonthAgoFormatted() {
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    const day = oneMonthAgo.getDate().toString().padStart(2, '0');
-    const month = (oneMonthAgo.getMonth() + 1).toString().padStart(2, '0');
-    const year = oneMonthAgo.getFullYear();
-    return `${day}/${month}/${year}`;
-  }
+    function initializeMonthFilter() {
+      const yearFilter = document.getElementById('year-filter');
+      const monthFilter = document.getElementById('month-filter');
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth() + 1;
 
-  // Fetch Service History (1개월 전 데이터부터 조회하며, status에 "✅" 또는 "⚠️"가 포함된 항목은 제외)
-  async function fetchServiceHistory() {
-    const fromDateFormatted = getOneMonthAgoFormatted();
+      // 연도 옵션 생성 (2025년부터 현재 연도까지)
+      for (let year = 2025; year >= currentYear; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = `${year}`;
+        yearFilter.appendChild(option);
+      }
 
-    const response = await fetch(GRAPHQL_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query: `
-          query GetHistoryList($from_date: string!) {
-            history(
-              where: { 
-                date: { _gt: $from_date },
-              }
-            ) {
-              _id
-              date
-              status
-            }
-          }
-        `,
-        variables: {
-          from_date: fromDateFormatted
+      // 월 옵션 업데이트 함수
+      function updateMonthOptions() {
+        const selectedYear = parseInt(yearFilter.value);
+        monthFilter.innerHTML = ''; // 기존 옵션 초기화
+
+        // 최대 월 계산 (현재 연도인 경우 현재 월까지만)
+        const maxMonth = selectedYear === currentYear ? currentMonth : 12;
+
+        for (let month = 1; month <= maxMonth; month++) {
+          const option = document.createElement('option');
+          option.value = month.toString().padStart(2, '0');
+          option.textContent = `${month}`;
+          monthFilter.appendChild(option);
         }
-      }),
-    });
+      }
 
-    const result = await response.json();
-    console.log("History", result);
-    
-    const serviceHistoryElement = document.getElementById("service-history");
-    const filteredHistory = result.data.history.filter(item => {
-      return !item.status.includes("✅") && !item.status.includes("⚠️");
-    });
-    
-    serviceHistoryElement.innerHTML = "";
-    if (filteredHistory.length > 0) {
-      filteredHistory.forEach(item => {
-        const listItem = document.createElement("li");
-        listItem.textContent = `${item.date}: ${item.status}`;
-        serviceHistoryElement.appendChild(listItem);
+      // 초기 월 옵션 설정
+      updateMonthOptions();
+
+      // 이벤트 리스너 설정
+      yearFilter.addEventListener('change', () => {
+        fetchData();
       });
-    } else {
-      serviceHistoryElement.innerHTML = "<li>There has been no service downtime in the past 30 days.</li>";
-    }
-  }
 
-    // Fetch Event List
-    async function fetchEventList() {
+      monthFilter.addEventListener('change', () => {
+        fetchData();
+      });
+    }
+
+    function getSelectedMonthDates() {
+      const selectedYear = document.getElementById('year-filter').value;
+      const selectedMonth = document.getElementById('month-filter').value;
+      
+      // 선택된 월의 시작일과 종료일을 Date 객체로 생성
+      const startDate = new Date(selectedYear, parseInt(selectedMonth) - 1, 1);
+      const endDate = new Date(selectedYear, parseInt(selectedMonth), 0, 23, 59, 59); // 해당 월의 마지막 날 23:59:59
+
+      // timestamp로 변환 (밀리초 단위)
+      return {
+        startTimestamp: startDate.getTime().toString(),
+        endTimestamp: endDate.getTime().toString()
+      };
+    }
+
+    async function fetchServiceHistory() {
+      const { startTimestamp, endTimestamp } = getSelectedMonthDates();
+
       const response = await fetch(GRAPHQL_URL, {
         method: "POST",
         headers: {
@@ -126,8 +162,64 @@
         },
         body: JSON.stringify({
           query: `
-            query GetEvent {
-              event {
+            query GetHistoryList($start_timestamp: string!, $end_timestamp: string!) {
+              history(
+                where: { 
+                  _id: { _gte: $start_timestamp, _lte: $end_timestamp }
+                },
+                order_by: { _id: asc }
+              ) {
+                _id
+                date
+                status
+              }
+            }
+          `,
+          variables: {
+            start_timestamp: startTimestamp,
+            end_timestamp: endTimestamp
+          }
+        }),
+      });
+
+      const result = await response.json();
+      console.log("History", result);
+      
+      const serviceHistoryElement = document.getElementById("service-history");
+      const filteredHistory = result.data.history.filter(item => {
+        return !item.status.includes("✅") && !item.status.includes("⚠️");
+      });
+      
+      serviceHistoryElement.innerHTML = "";
+      if (filteredHistory.length > 0) {
+        filteredHistory.forEach(item => {
+          const listItem = document.createElement("li");
+          listItem.textContent = `${item.date}: ${item.status}`;
+          serviceHistoryElement.appendChild(listItem);
+        });
+      } else {
+        serviceHistoryElement.innerHTML = "<li>There has been no service downtime in the past 30 days.</li>";
+      }
+    }
+
+    // Fetch Event List
+    async function fetchEventList() {
+      const { startTimestamp, endTimestamp } = getSelectedMonthDates();
+      
+      const response = await fetch(GRAPHQL_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `
+            query GetEvent($start_timestamp: string!, $end_timestamp: string!) {
+              event(
+                where: { 
+                  _id: { _gte: $start_timestamp, _lte: $end_timestamp }
+                },
+                order_by: { _id: asc}
+              ) {
                 name
                 _id
                 lastUpdateTime
@@ -137,11 +229,25 @@
               }
             }
           `,
+          variables: {
+            start_timestamp: startTimestamp,
+            end_timestamp: endTimestamp
+          }
         }),
       });
+      
       const result = await response.json();
+      console.log("EventList", result);
       const eventListElement = document.getElementById("event-list");
       eventListElement.innerHTML = "";
+      
+      if (result.data.event.length === 0) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td colspan="3">해당 기간에 이벤트가 없습니다.</td>';
+        eventListElement.appendChild(row);
+        return;
+      }
+
       result.data.event.forEach((event) => {
         const row = document.createElement("tr");
         row.innerHTML = `
@@ -149,13 +255,11 @@
           <td>${event.startTime}</td>
           <td>${event.lastUpdateTime}</td>
         `;
-        // Add event listener to fetch details on click
         row.addEventListener("click", () => fetchEventDetails(event._id));
         eventListElement.appendChild(row);
       });
     }
 
-    // Fetch Event Details
     // Fetch Event Details
     async function fetchEventDetails(eventId) {
       const response = await fetch(GRAPHQL_URL, {
@@ -219,16 +323,250 @@
       }
     }
 
+    async function downloadReport() {
+      const spinner = document.getElementById('loading-spinner');
+      const downloadBtn = document.getElementById('download-report');
+      
+      try {
+        spinner.classList.remove('hidden');
+        downloadBtn.disabled = true;
+        downloadBtn.style.opacity = '0.7';
+        
+        const selectedYear = document.getElementById('year-filter').value;
+        const selectedMonth = document.getElementById('month-filter').value;
+        const paddedMonth = selectedMonth.padStart(2, '0');
+
+        const response = await fetch('https://hstm-report.braydenlab.com/hstm-report-maker', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            year: parseInt(selectedYear),
+            month: parseInt(selectedMonth)
+          })
+        });
+
+        const data = await response.json();
+        console.log('Report data:', data);
+
+        // 기존 차트 제거
+        const canvas = document.getElementById('reportChart');
+        const context = canvas.getContext('2d');
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        if (window.reportChart instanceof Chart) {
+          window.reportChart.destroy();
+        }
+
+        canvas.width = 800;
+        canvas.height = 400;
+
+        // 새로운 차트 생성 및 전역 변수에 저장
+        window.reportChart = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: ['Monthly Uptime', 'Annual Uptime'],
+            datasets: [{
+              label: 'Uptime Rate (%)',
+              data: [data.monthly_report.update_rate, data.yearly_report.update_rate],
+              backgroundColor: ['rgba(75, 192, 192, 0.6)', 'rgba(54, 162, 235, 0.6)'],
+              borderColor: ['rgba(75, 192, 192, 1)', 'rgba(54, 162, 235, 1)'],
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100
+              }
+            }
+          }
+        });
+
+        // PDF 생성
+        const pdf = new jspdf.jsPDF();
+        
+        // 제목과 날짜 추가
+        pdf.setFontSize(20);
+        pdf.text('Service Uptime Report', 20, 20);
+        
+        // 우측 상단에 년월 표시
+        pdf.setFontSize(12);
+        pdf.text(`${selectedYear}.${paddedMonth}`, 170, 20, { align: 'right' });
+        
+        // 월간 리포트 정보
+        pdf.setFontSize(14);
+        pdf.text('Monthly Report', 20, 40);
+        pdf.setFontSize(12);
+        pdf.text(`Total Hours: ${(data.monthly_report.total_seconds / 3600).toFixed(1)} hours`, 30, 50);
+        pdf.text(`Downtime: ${(data.monthly_report.error_seconds / 3600).toFixed(1)} hours`, 30, 60);
+        pdf.text(`Uptime Rate: ${data.monthly_report.update_rate.toFixed(2)}%`, 30, 70);
+
+        // 연간 리포트 정보
+        pdf.setFontSize(14);
+        pdf.text('Annual Report', 20, 90);
+        pdf.setFontSize(12);
+        pdf.text(`Total Hours: ${(data.yearly_report.total_seconds / 3600).toFixed(1)} hours`, 30, 100);
+        pdf.text(`Downtime: ${(data.yearly_report.error_seconds / 3600).toFixed(1)} hours`, 30, 110);
+        pdf.text(`Uptime Rate: ${data.yearly_report.update_rate.toFixed(2)}%`, 30, 120);
+
+        // 차트 이미지 추가
+        const chartImage = canvas.toDataURL('image/png');
+        pdf.addImage(chartImage, 'PNG', 20, 140, 170, 85);
+
+        // 동적 파일명으로 PDF 다운로드
+        pdf.save(`report_${selectedYear}${paddedMonth}.pdf`);
+
+      } catch (error) {
+        console.error('Error downloading report:', error);
+        alert('Error downloading report.');
+      } finally {
+        spinner.classList.add('hidden');
+        downloadBtn.disabled = false;
+        downloadBtn.style.opacity = '1';
+      }
+    }
+
+    async function fetchData() {
+      const historySection = document.querySelector('.section:nth-child(2)');
+      const eventSection = document.querySelector('.section:nth-child(4)');
+      const historyLoader = historySection.querySelector('.section-loader');
+      const eventLoader = eventSection.querySelector('.section-loader');
+      const historyContent = historySection.querySelector('.section-content');
+      const eventContent = eventSection.querySelector('.section-content');
+
+      try {
+        // 로딩 상태 시작
+        historyLoader.classList.remove('hidden');
+        eventLoader.classList.remove('hidden');
+        historyContent.classList.add('dimmed');
+        eventContent.classList.add('dimmed');
+
+        // 두 데이터를 동시에 가져오기
+        await Promise.all([
+          fetchServiceHistory(),
+          fetchEventList()
+        ]);
+      } finally {
+        // 로딩 상태 종료
+        historyLoader.classList.add('hidden');
+        eventLoader.classList.add('hidden');
+        historyContent.classList.remove('dimmed');
+        eventContent.classList.remove('dimmed');
+      }
+    }
 
     // Initialize Page
     async function initializePage() {
       const lastUpdatedElement = document.getElementById("last-updated");
       lastUpdatedElement.textContent = new Date().toLocaleString();
-      await Promise.all([fetchServiceHistory(), fetchEventList()]);
+      initializeMonthFilter();
+      await fetchData();
     }
 
     // On page load
     document.addEventListener("DOMContentLoaded", initializePage);
+
+    // 이벤트 리스너 추가
+    document.getElementById('download-report').addEventListener('click', downloadReport);
   </script>
+
+  <style>
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+
+  .download-btn {
+    background-color: #4CAF50;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .download-btn:hover {
+    background-color: #45a049;
+  }
+
+  .download-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #4CAF50;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .filters-section {
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+  }
+
+  .filters-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .filters-left {
+    display: flex;
+    align-items: center;
+  }
+
+  .filters-left select {
+    margin: 0 15px 0 5px;
+    padding: 5px;
+  }
+
+  .dimmed {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .loading-container {
+    position: relative;
+  }
+
+  .section-loader {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+  }
+
+  .section-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #4CAF50;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  </style>
 </body>
 </html>
