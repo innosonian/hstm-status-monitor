@@ -13,44 +13,60 @@
   </header>
   
   <div class="content">
-    <!-- Service History Section -->
-    <div class="section">
-      <div class="section-header">
-        <h2>Service History</h2>
+    <!-- Common Filters -->
+    <div class="filters-section">
+      <div class="filters-container">
+        <div class="filters-left">
+          <span>Year</span>
+          <select id="year-filter"></select>
+          <span>Month</span>
+          <select id="month-filter"></select>
+        </div>
         <div class="download-container">
           <button id="download-report" class="download-btn">Download Report</button>
           <div id="loading-spinner" class="spinner hidden"></div>
         </div>
       </div>
-      <div>
-        <span>Year</span>
-        <select id="year-filter"></select>
-        <span>Month</span>
-        <select id="month-filter"></select>
+    </div>
+
+    <!-- Service History Section -->
+    <div class="section loading-container">
+      <div class="section-loader hidden">
+        <div class="section-spinner"></div>
       </div>
-      <ul id="service-history">
-        <li>Loading...</li>
-      </ul>
+      <div class="section-content">
+        <div class="section-header">
+          <h2>Service History</h2>
+        </div>
+        <ul id="service-history">
+          <li>Loading...</li>
+        </ul>
+      </div>
     </div>
 
     <!-- 차트를 그리기 위한 숨겨진 캔버스 -->
     <canvas id="reportChart" style="display: none;"></canvas>
 
     <!-- List of Events -->
-    <div class="section">
-      <h2>List of Events</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Event</th>
-            <th>Start Time</th>
-            <th>Last Update Time</th>
-          </tr>
-        </thead>
-        <tbody id="event-list">
-          <tr><td colspan="3">Loading...</td></tr>
-        </tbody>
-      </table>
+    <div class="section loading-container">
+      <div class="section-loader hidden">
+        <div class="section-spinner"></div>
+      </div>
+      <div class="section-content">
+        <h2>List of Events</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>Start Time</th>
+              <th>Last Update Time</th>
+            </tr>
+          </thead>
+          <tbody id="event-list">
+            <tr><td colspan="3">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Event Details -->
@@ -113,11 +129,12 @@
 
       // 이벤트 리스너 설정
       yearFilter.addEventListener('change', () => {
-        updateMonthOptions();
-        fetchServiceHistory();
+        fetchData();
       });
 
-      monthFilter.addEventListener('change', fetchServiceHistory);
+      monthFilter.addEventListener('change', () => {
+        fetchData();
+      });
     }
 
     function getSelectedMonthDates() {
@@ -187,6 +204,8 @@
 
     // Fetch Event List
     async function fetchEventList() {
+      const { startTimestamp, endTimestamp } = getSelectedMonthDates();
+      
       const response = await fetch(GRAPHQL_URL, {
         method: "POST",
         headers: {
@@ -194,8 +213,13 @@
         },
         body: JSON.stringify({
           query: `
-            query GetEvent {
-              event {
+            query GetEvent($start_timestamp: string!, $end_timestamp: string!) {
+              event(
+                where: { 
+                  _id: { _gte: $start_timestamp, _lte: $end_timestamp }
+                },
+                order_by: { _id: asc}
+              ) {
                 name
                 _id
                 lastUpdateTime
@@ -205,11 +229,25 @@
               }
             }
           `,
+          variables: {
+            start_timestamp: startTimestamp,
+            end_timestamp: endTimestamp
+          }
         }),
       });
+      
       const result = await response.json();
+      console.log("EventList", result);
       const eventListElement = document.getElementById("event-list");
       eventListElement.innerHTML = "";
+      
+      if (result.data.event.length === 0) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td colspan="3">해당 기간에 이벤트가 없습니다.</td>';
+        eventListElement.appendChild(row);
+        return;
+      }
+
       result.data.event.forEach((event) => {
         const row = document.createElement("tr");
         row.innerHTML = `
@@ -217,7 +255,6 @@
           <td>${event.startTime}</td>
           <td>${event.lastUpdateTime}</td>
         `;
-        // Add event listener to fetch details on click
         row.addEventListener("click", () => fetchEventDetails(event._id));
         eventListElement.appendChild(row);
       });
@@ -311,12 +348,19 @@
         const data = await response.json();
         console.log('Report data:', data);
 
-        // 차트 생성
+        // 기존 차트 제거
         const canvas = document.getElementById('reportChart');
+        const context = canvas.getContext('2d');
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        if (window.reportChart instanceof Chart) {
+          window.reportChart.destroy();
+        }
+
         canvas.width = 800;
         canvas.height = 400;
 
-        new Chart(canvas, {
+        // 새로운 차트 생성 및 전역 변수에 저장
+        window.reportChart = new Chart(canvas, {
           type: 'bar',
           data: {
             labels: ['Monthly Uptime', 'Annual Uptime'],
@@ -379,12 +423,41 @@
       }
     }
 
+    async function fetchData() {
+      const historySection = document.querySelector('.section:nth-child(2)');
+      const eventSection = document.querySelector('.section:nth-child(4)');
+      const historyLoader = historySection.querySelector('.section-loader');
+      const eventLoader = eventSection.querySelector('.section-loader');
+      const historyContent = historySection.querySelector('.section-content');
+      const eventContent = eventSection.querySelector('.section-content');
+
+      try {
+        // 로딩 상태 시작
+        historyLoader.classList.remove('hidden');
+        eventLoader.classList.remove('hidden');
+        historyContent.classList.add('dimmed');
+        eventContent.classList.add('dimmed');
+
+        // 두 데이터를 동시에 가져오기
+        await Promise.all([
+          fetchServiceHistory(),
+          fetchEventList()
+        ]);
+      } finally {
+        // 로딩 상태 종료
+        historyLoader.classList.add('hidden');
+        eventLoader.classList.add('hidden');
+        historyContent.classList.remove('dimmed');
+        eventContent.classList.remove('dimmed');
+      }
+    }
+
     // Initialize Page
     async function initializePage() {
       const lastUpdatedElement = document.getElementById("last-updated");
       lastUpdatedElement.textContent = new Date().toLocaleString();
       initializeMonthFilter();
-      await Promise.all([fetchServiceHistory(), fetchEventList()]);
+      await fetchData();
     }
 
     // On page load
@@ -438,6 +511,55 @@
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+
+  .filters-section {
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+  }
+
+  .filters-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .filters-left {
+    display: flex;
+    align-items: center;
+  }
+
+  .filters-left select {
+    margin: 0 15px 0 5px;
+    padding: 5px;
+  }
+
+  .dimmed {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .loading-container {
+    position: relative;
+  }
+
+  .section-loader {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+  }
+
+  .section-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #4CAF50;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
   }
   </style>
 </body>
