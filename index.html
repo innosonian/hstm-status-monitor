@@ -226,6 +226,10 @@
                 name
                 startTime
                 lastUpdateTime
+                status
+                service
+                date
+                description
               }
             }
           `,
@@ -242,7 +246,7 @@
 
         // Update event details section
         const eventDetailsSection = document.getElementById("event-details");
-        document.getElementById("event-status").textContent = eventData.resolved
+        document.getElementById("event-status").textContent = eventData.status
           ? "Resolved"
           : "Unresolved";
         document.getElementById("event-name").textContent = eventData.name;
