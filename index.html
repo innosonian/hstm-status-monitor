@@ -195,6 +195,8 @@
         }),
       });
       const result = await response.json();
+      console.log('Event', result)
+      
       const eventListElement = document.getElementById("event-list");
       eventListElement.innerHTML = "";
       result.data.event.forEach((event) => {
@@ -220,12 +222,17 @@
         },
         body: JSON.stringify({
           query: `
-            query GetEventDetail($id: string) {
-              event_detail(where: { _id: { _eq: $id } }) {
+            query GetEventDetail3($id: string) {
+              event_detail_3(where: { _id: { _eq: $id } }) {
                 _id
                 name
                 startTime
                 lastUpdateTime
+                link
+                status
+                description
+                service
+                date
               }
             }
           `,
@@ -236,9 +243,10 @@
       }); 
 
       const result = await response.json(); 
+      console.log('EventDetail', result)
 
       if (response.ok && !result.errors) {
-        const eventData = result.data.event_detail[0]; // Assuming one matching record  
+        const eventData = result.data.event_detail_3[0]; // Assuming one matching record  
 
         // Update event details section
         const eventDetailsSection = document.getElementById("event-details");
@@ -247,17 +255,16 @@
           : "Unresolved";
         document.getElementById("event-name").textContent = eventData.name;
         document.getElementById("event-start").textContent = eventData.startTime;
-        document.getElementById("event-last-update").textContent =
-          eventData.lastUpdateTime;
-          document.getElementById("event-service").textContent = eventData.service || "N/A";
+        document.getElementById("event-last-update").textContent = eventData.lastUpdateTime;
+        document.getElementById("event-service").textContent = eventData.service;
 
           const timelineElement = document.getElementById("event-description");
           timelineElement.innerHTML = "";
-          if (eventData.description) {
+          if (eventData.description.length > 0) {
             eventData.description.forEach((desc) => {
               const timelineItem = document.createElement("div");
               timelineItem.className = "timeline-item";
-              timelineItem.innerHTML = `<p><strong>${desc.time}:</strong> ${desc.detail}</p>`;
+              timelineItem.innerHTML = `<p>${desc}</p>`;
               timelineElement.appendChild(timelineItem);
             });
           } else {
