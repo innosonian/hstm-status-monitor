@@ -221,11 +221,16 @@
         body: JSON.stringify({
           query: `
             query GetEventDetail($id: string) {
-              event_detail(where: { _id: { _eq: $id } }) {
+              event_detail_3(where: { _id: { _eq: $id } }) {
                 _id
                 name
                 startTime
                 lastUpdateTime
+                link
+                status
+                description
+                service
+                date
               }
             }
           `,
