@@ -108,6 +108,9 @@
         yearFilter.appendChild(option);
       }
 
+      // 현재 연도 선택
+      yearFilter.value = currentYear;
+
       // 월 옵션 업데이트 함수
       function updateMonthOptions() {
         const selectedYear = parseInt(yearFilter.value);
@@ -122,6 +125,13 @@
           option.textContent = `${month}`;
           monthFilter.appendChild(option);
         }
+
+        // 현재 연도인 경우 현재 월을 선택
+        if (selectedYear === currentYear) {
+          monthFilter.value = currentMonth.toString().padStart(2, '0');
+        } else {
+          monthFilter.value = '01'; // 다른 연도의 경우 1월 선택
+        }
       }
 
       // 초기 월 옵션 설정
@@ -129,6 +139,7 @@
 
       // 이벤트 리스너 설정
       yearFilter.addEventListener('change', () => {
+        updateMonthOptions();
         fetchData();
       });
 
@@ -442,8 +453,18 @@
       const eventLoader = eventSection.querySelector('.section-loader');
       const historyContent = historySection.querySelector('.section-content');
       const eventContent = eventSection.querySelector('.section-content');
+      const eventDetailsSection = document.getElementById('event-details');
 
       try {
+        // event details 섹션 초기화 및 숨기기
+        eventDetailsSection.classList.add('hidden');
+        document.getElementById("event-status").textContent = "Loading...";
+        document.getElementById("event-name").textContent = "Loading...";
+        document.getElementById("event-start").textContent = "Loading...";
+        document.getElementById("event-last-update").textContent = "Loading...";
+        document.getElementById("event-service").textContent = "Loading...";
+        document.getElementById("event-description").innerHTML = '<div class="timeline-item"><p>Loading...</p></div>';
+
         // 로딩 상태 시작
         historyLoader.classList.remove('hidden');
         eventLoader.classList.remove('hidden');
