@@ -11,7 +11,7 @@
     <h1>Status Page</h1>
     <p>Last Updated: <span id="last-updated">Loading...</span></p>
   </header>
-  
+
   <div class="content">
     <!-- Common Filters -->
     <div class="filters-section">
@@ -151,7 +151,7 @@
     function getSelectedMonthDates() {
       const selectedYear = document.getElementById('year-filter').value;
       const selectedMonth = document.getElementById('month-filter').value;
-      
+
       // 선택된 월의 시작일과 종료일을 Date 객체로 생성
       const startDate = new Date(selectedYear, parseInt(selectedMonth) - 1, 1);
       const endDate = new Date(selectedYear, parseInt(selectedMonth), 0, 23, 59, 59); // 해당 월의 마지막 날 23:59:59
@@ -175,7 +175,7 @@
           query: `
             query GetHistoryList($start_timestamp: string!, $end_timestamp: string!) {
               history(
-                where: { 
+                where: {
                   _id: { _gte: $start_timestamp, _lte: $end_timestamp }
                 },
                 order_by: { _id: asc }
@@ -195,12 +195,12 @@
 
       const result = await response.json();
       console.log("History", result);
-      
+
       const serviceHistoryElement = document.getElementById("service-history");
       const filteredHistory = result.data.history.filter(item => {
         return !item.status.includes("✅") && !item.status.includes("⚠️");
       });
-      
+
       serviceHistoryElement.innerHTML = "";
       if (filteredHistory.length > 0) {
         filteredHistory.forEach(item => {
@@ -216,7 +216,7 @@
     // Fetch Event List
     async function fetchEventList() {
       const { startTimestamp, endTimestamp } = getSelectedMonthDates();
-      
+
       const response = await fetch(GRAPHQL_URL, {
         method: "POST",
         headers: {
@@ -226,7 +226,7 @@
           query: `
             query GetEvent($start_timestamp: string!, $end_timestamp: string!) {
               event(
-                where: { 
+                where: {
                   _id: { _gte: $start_timestamp, _lte: $end_timestamp }
                 },
                 order_by: { _id: asc}
@@ -246,13 +246,13 @@
           }
         }),
       });
-      
+
       const result = await response.json();
       console.log("EventList", result);
 
       const eventListElement = document.getElementById("event-list");
       eventListElement.innerHTML = "";
-      
+
       if (result.data.event.length === 0) {
         const row = document.createElement("tr");
         row.innerHTML = '<td colspan="3">N/A</td>';
@@ -267,7 +267,21 @@
           <td>${event.startTime}</td>
           <td>${event.lastUpdateTime}</td>
         `;
-        row.addEventListener("click", () => fetchEventDetails(event._id));
+        row.addEventListener("click", () => {
+          // 클립보드에 이벤트 ID 복사
+          navigator.clipboard.writeText(event._id)
+            .then(() => {
+              // 복사 성공 시 시각적 피드백
+              const originalColor = row.style.backgroundColor;
+              row.style.backgroundColor = '#e6ffe6';
+              setTimeout(() => {
+                row.style.backgroundColor = originalColor;
+              }, 500);
+            })
+            .catch(err => console.error('클립보드 복사 실패:', err));
+
+          fetchEventDetails(event._id);
+        });
         eventListElement.appendChild(row);
       });
     }
@@ -299,13 +313,13 @@
             id: eventId,
           },
         }),
-      }); 
+      });
 
-      const result = await response.json(); 
+      const result = await response.json();
       console.log('EventDetail', result)
 
       if (response.ok && !result.errors) {
-        const eventData = result.data.event_detail_3[0]; // Assuming one matching record  
+        const eventData = result.data.event_detail_3[0]; // Assuming one matching record
 
         // Update event details section
         const eventDetailsSection = document.getElementById("event-details");
@@ -343,12 +357,12 @@
     async function downloadReport() {
       const spinner = document.getElementById('loading-spinner');
       const downloadBtn = document.getElementById('download-report');
-      
+
       try {
         spinner.classList.remove('hidden');
         downloadBtn.disabled = true;
         downloadBtn.style.opacity = '0.7';
-        
+
         const selectedYear = document.getElementById('year-filter').value;
         const selectedMonth = document.getElementById('month-filter').value;
         const paddedMonth = selectedMonth.padStart(2, '0');
@@ -404,15 +418,15 @@
 
         // PDF 생성
         const pdf = new jspdf.jsPDF();
-        
+
         // 제목과 날짜 추가
         pdf.setFontSize(20);
         pdf.text('Service Uptime Report', 20, 20);
-        
+
         // 우측 상단에 년월 표시
         pdf.setFontSize(12);
         pdf.text(`${selectedYear}.${paddedMonth}`, 170, 20, { align: 'right' });
-        
+
         // 월간 리포트 정보
         pdf.setFontSize(14);
         pdf.text('Monthly Report', 20, 40);
