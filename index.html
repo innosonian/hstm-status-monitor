@@ -103,8 +103,9 @@
       const currentYear = today.getFullYear();
       const currentMonth = today.getMonth() + 1;
 
-      // 연도 옵션 생성 (2025년부터 현재 연도까지)
-      for (let year = 2025; year >= currentYear; year--) {
+      // 연도 옵션 생성 (현재 연도부터 서비스 시작 연도인 2025년까지 내림차순)
+      // 시작값과 종료값이 뒤바뀌어 있어 2026년부터 루프가 한 번도 실행되지 않았다.
+      for (let year = currentYear; year >= 2025; year--) {
         const option = document.createElement('option');
         option.value = year;
         option.textContent = `${year}`;
