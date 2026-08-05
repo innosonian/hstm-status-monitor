@@ -30,7 +30,7 @@
     </div>
 
     <!-- Service History Section -->
-    <div class="section loading-container">
+    <div class="section loading-container" id="history-section">
       <div class="section-loader hidden">
         <div class="section-spinner"></div>
       </div>
@@ -48,7 +48,7 @@
     <canvas id="reportChart" style="display: none;"></canvas>
 
     <!-- List of Events -->
-    <div class="section loading-container">
+    <div class="section loading-container" id="event-section">
       <div class="section-loader hidden">
         <div class="section-spinner"></div>
       </div>
@@ -58,8 +58,8 @@
           <thead>
             <tr>
               <th>Event</th>
-              <th>Start Time</th>
-              <th>Last Update Time</th>
+              <th>Start Time (PT)</th>
+              <th>Last Update Time (PT)</th>
             </tr>
           </thead>
           <tbody id="event-list">
@@ -74,8 +74,8 @@
       <h2>Event Details</h2>
       <p><strong>Status:</strong> <span id="event-status">Loading...</span></p>
       <p><strong>Event Name:</strong> <span id="event-name">Loading...</span></p>
-      <p><strong>Start Time:</strong> <span id="event-start">Loading...</span></p>
-      <p><strong>Last Update Time:</strong> <span id="event-last-update">Loading...</span></p>
+      <p><strong>Start Time (PT):</strong> <span id="event-start">Loading...</span></p>
+      <p><strong>Last Update Time (PT):</strong> <span id="event-last-update">Loading...</span></p>
       <p><strong>Service:</strong> <span id="event-service">Loading...</span></p>
       <h3>Description</h3>
       <div class="timeline" id="event-description">
@@ -96,6 +96,12 @@
     // status_checker.py 의 _get_today_history() 가 기록하는 정상 상태 문자열
     const OPERATIONAL_STATUS = "✅ All services operational";
 
+    // 상태 기록이 시작된 연도. 연도 필터의 하한값이다.
+    const SERVICE_START_YEAR = 2025;
+
+    // status_checker.py 가 event_detail 에 기록하는 해결 상태 값
+    const RESOLVED_STATUS = "resolved";
+
     function initializeMonthFilter() {
       const yearFilter = document.getElementById('year-filter');
       const monthFilter = document.getElementById('month-filter');
@@ -103,9 +109,8 @@
       const currentYear = today.getFullYear();
       const currentMonth = today.getMonth() + 1;
 
-      // 연도 옵션 생성 (현재 연도부터 서비스 시작 연도인 2025년까지 내림차순)
-      // 시작값과 종료값이 뒤바뀌어 있어 2026년부터 루프가 한 번도 실행되지 않았다.
-      for (let year = currentYear; year >= 2025; year--) {
+      // 연도 옵션 생성 (현재 연도부터 서비스 시작 연도까지 내림차순)
+      for (let year = currentYear; year >= SERVICE_START_YEAR; year--) {
         const option = document.createElement('option');
         option.value = year;
         option.textContent = `${year}`;
@@ -213,7 +218,10 @@
           serviceHistoryElement.appendChild(listItem);
         });
       } else {
-        serviceHistoryElement.innerHTML = "<li>There has been no service downtime in the past 30 days.</li>";
+        // 조회 범위는 선택한 월이므로 문구도 해당 월을 가리켜야 한다
+        const selectedYear = document.getElementById('year-filter').value;
+        const selectedMonth = document.getElementById('month-filter').value;
+        serviceHistoryElement.innerHTML = `<li>No service downtime in ${selectedYear}-${selectedMonth}.</li>`;
       }
     }
 
@@ -240,7 +248,6 @@
                 lastUpdateTime
                 service
                 startTime
-                resolved
               }
             }
           `,
@@ -327,9 +334,10 @@
 
         // Update event details section
         const eventDetailsSection = document.getElementById("event-details");
-        document.getElementById("event-status").textContent = eventData.status
-          ? "Resolved"
-          : "Unresolved";
+        // status 는 "resolved" / "unresolved" 문자열이라 값 자체는 항상 truthy 다.
+        // 존재 여부가 아니라 값으로 판정해야 한다.
+        document.getElementById("event-status").textContent =
+          eventData.status === RESOLVED_STATUS ? "Resolved" : "Unresolved";
         document.getElementById("event-name").textContent = eventData.name;
         document.getElementById("event-start").textContent = eventData.startTime;
         document.getElementById("event-last-update").textContent = eventData.lastUpdateTime;
@@ -341,7 +349,9 @@
             eventData.description.forEach((desc) => {
               const timelineItem = document.createElement("div");
               timelineItem.className = "timeline-item";
-              timelineItem.innerHTML = `<p>${desc}</p>`;
+              const paragraph = document.createElement("p");
+              paragraph.textContent = desc;
+              timelineItem.appendChild(paragraph);
               timelineElement.appendChild(timelineItem);
             });
           } else {
@@ -465,8 +475,8 @@
     }
 
     async function fetchData() {
-      const historySection = document.querySelector('.section:nth-child(2)');
-      const eventSection = document.querySelector('.section:nth-child(4)');
+      const historySection = document.getElementById('history-section');
+      const eventSection = document.getElementById('event-section');
       const historyLoader = historySection.querySelector('.section-loader');
       const eventLoader = eventSection.querySelector('.section-loader');
       const historyContent = historySection.querySelector('.section-content');
@@ -500,13 +510,14 @@
         eventLoader.classList.add('hidden');
         historyContent.classList.remove('dimmed');
         eventContent.classList.remove('dimmed');
+
+        // 데이터를 실제로 가져온 시각으로 갱신한다. 필터를 바꿔도 반영된다.
+        document.getElementById("last-updated").textContent = new Date().toLocaleString();
       }
     }
 
     // Initialize Page
     async function initializePage() {
-      const lastUpdatedElement = document.getElementById("last-updated");
-      lastUpdatedElement.textContent = new Date().toLocaleString();
       initializeMonthFilter();
       await fetchData();
     }
