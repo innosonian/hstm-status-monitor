@@ -93,6 +93,9 @@
   <script>
     const GRAPHQL_URL = "https://curious-moccasin-87.hasura.app/v1/graphql";
 
+    // status_checker.py 의 _get_today_history() 가 기록하는 정상 상태 문자열
+    const OPERATIONAL_STATUS = "✅ All services operational";
+
     function initializeMonthFilter() {
       const yearFilter = document.getElementById('year-filter');
       const monthFilter = document.getElementById('month-filter');
@@ -197,9 +200,9 @@
       console.log("History", result);
 
       const serviceHistoryElement = document.getElementById("service-history");
-      const filteredHistory = result.data.history.filter(item => {
-        return !item.status.includes("✅") && !item.status.includes("⚠️");
-      });
+      // history.status_code(good/warning/error)가 Hasura 논리 모델에 노출되지 않아 표시 문자열로 판별한다.
+      // 정상인 날짜만 제외하고, 이슈가 복구된 날짜(warning)와 미해결 날짜(error)는 모두 노출한다.
+      const filteredHistory = result.data.history.filter(item => item.status !== OPERATIONAL_STATUS);
 
       serviceHistoryElement.innerHTML = "";
       if (filteredHistory.length > 0) {
